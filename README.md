@@ -11,11 +11,11 @@ To simplify implementation, we make the assumption that, for every ancestry $a \
 
 We also make the assumption that data provided to the model comes from a SNP array in a VCF file, is phased, and comes with a genetic map which can be used to calculate distance in Morgans between SNPs.
 
+### Observations / Emissions
+Our observations are the sequence of alleles in some target individual's phased haplotype. The emission probability $P(O_m \mid S_m)$ depends on parameters which are learned through the Baum-Welch algorithm. More details can be found in the Supplementary Methods section of Browning et al. 2023.
+
 ### States
 The unobserved state at marker $m$ is $S_m = (i, h)$, where $i$ is is the ancestry of $m$ and the donor reference haploytpe $h$.
-
-### Emissions
-Each emission along the sequence represents the observed allele in the individual's phased haplotype. The emission probability $P(O_m \mid S_m)$ depends on parameters which are learned through the Baum-Welch algorithm. More details can be found in the Supplementary Methods section of Browning et al. 2023.
 
 ### Transitions
 There are two "types" of transitions in the FLARE model.
