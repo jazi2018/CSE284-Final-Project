@@ -25,7 +25,7 @@ class Laihmm:
         πi for i ∈ A = 1 / |A|
     """
 
-    def __init__(self, emission_matrix: np.ndarray, transition_prob: float = 0.001):
+    def __init__(self, emission_matrix: np.ndarray, transition_prob: float = 0.001) -> None:
         """
         Initializes the model.
 
@@ -49,8 +49,20 @@ class Laihmm:
         self.emissions = emission_matrix
         self.transition_probability = transition_prob
         self.num_ancestries, self.num_snps = emission_matrix.shape
+
+        ### BUILD TRANSITION MATRIX ###
+        #probability to transition to self
+        self_transition = 1 - self.transition_probability
+        #probability to transition to any other
+        other_transition = self.transition_probability / (self.num_ancestries - 1)
+        log_transitions = np.full((self.num_ancestries, self.num_ancestries), np.log(other_transition))
+        #fill out our transition matrix
+        np.fill_diagonal(log_transitions, np.log(self_transition))
+
+        self.log_transitons = log_transitions
+        ################################
     
-    def predict(self, target_genotype: np.ndarray):
+    def predict(self, target_genotype: np.ndarray) -> list[int]:
         """
         Predicts the most likely state sequence through the Viterbi algorithm.
 
@@ -84,20 +96,12 @@ class Laihmm:
         
         log_emissions = np.log(self.emissions)
 
-        #probability to transition to self
-        self_transition = 1 - self.transition_probability
-        #probability to transition to any other
-        other_transition = self.transition_probability / (self.num_ancestries - 1)
-        log_transitions = np.full((self.num_ancestries, self.num_ancestries), np.log(other_transition))
-        #fill out our transition matrix
-        np.fill_diagonal(log_transitions, np.log(self_transition))
-
         #Viterbi forward pass
         for t in range(self.num_snps - 1):
             snp = target_genotype[t + 1]
             
             #score[i, j] = log P(state i at SNP t) + log P(transitioning from state i to state j)
-            scores = log_probs[:, t][:, None] + log_transitions
+            scores = log_probs[:, t][:, None] + self.log_transitions
 
             #now we find the best previous state for each state in our scores table
             #for backtracking later
@@ -116,3 +120,25 @@ class Laihmm:
             state_sequence[t - 1] = backtrack[state_sequence[t], t]
         
         return state_sequence.tolist()
+    
+    def update_transition(self, transition_prob: float) -> None:
+        """
+        Updates transition probability and re-builds transition matrix.
+
+        Parameters:
+        -
+        transition_prob : float
+            The new transition probability for the model. There is no default
+            value provided.
+        """
+        self.transition_probability = transition_prob
+
+        #probability to transition to self
+        self_transition = 1 - self.transition_probability
+        #probability to transition to any other
+        other_transition = self.transition_probability / (self.num_ancestries - 1)
+        log_transitions = np.full((self.num_ancestries, self.num_ancestries), np.log(other_transition))
+        #fill out our transition matrix
+        np.fill_diagonal(log_transitions, np.log(self_transition))
+
+        self.log_transitons = log_transitions
