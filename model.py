@@ -74,11 +74,12 @@ class Laihmm:
             E.g. [0, 0, 0, 1, 1, 2, 2, 0, ...]
         """
         #initialize Viterbi matrix
-        log_probs = np.zeros((self.num_ancestries, self.num_snps))
+        log_probs = np.zeros((self.num_ancestries, self.num_snps), dtype=float)
+        backtrack = np.zeros((self.num_ancestries, self.num_snps), dtype=int)
 
         #initials - equal to 1 / |A| (each ancestry is equally likely)
         for idx in range(self.num_ancestries):
-            #all operations are done in log space to prevent underflow
+            #all operations are done in log space to prevent underflow (and make arithmetic easier)
             log_probs[idx][0] = np.log(1 / self.num_ancestries)
         
         log_emissions = np.log(self.emissions)
@@ -87,13 +88,31 @@ class Laihmm:
         self_transition = 1 - self.transition_probability
         #probability to transition to any other
         other_transition = self.transition_probability / (self.num_ancestries - 1)
-        log_transition = np.full((self.num_ancestries, self.num_ancestries), np.log(other_transition))
+        log_transitions = np.full((self.num_ancestries, self.num_ancestries), np.log(other_transition))
         #fill out our transition matrix
-        log_transition = np.fill_diagonal(log_transition, np.log(self_transition))
+        np.fill_diagonal(log_transitions, np.log(self_transition))
 
+        #Viterbi forward pass
         for t in range(self.num_snps - 1):
             snp = target_genotype[t + 1]
-            #need to fix this broadcasting - it's for sure wrong (from my old code)
-            #going to write it iteratively first and convert to broadcasting after cause thats
-            #easier for me
-            log_probs[:, t + 1] = np.max(log_probs[:, t][:, None] + log_transition, axis = 0) + log_emissions[:, snp]
+            
+            #score[i, j] = log P(state i at SNP t) + log P(transitioning from state i to state j)
+            scores = log_probs[:, t][:, None] + log_transitions
+
+            #now we find the best previous state for each state in our scores table
+            #for backtracking later
+            backtrack[:, t + 1] = np.argmax(scores, axis=0)
+
+            #and now find the best probability at each state
+            log_probs[:, t + 1] = np.max(scores, axis=0) + log_emissions[:, snp]
+        
+        #backtracking to get sequence
+        state_sequence = np.zeros(self.num_snps, dtype=int)
+        state_sequence[-1] = np.argmax(log_probs[:, -1]) #find best final state
+
+        for t in range(self.num_snps - 1, 0, -1): #iterate backwards
+            #previous state informs backtrack row, t informs column
+            #backtrack was built to encode the best path to each node
+            state_sequence[t - 1] = backtrack[state_sequence[t], t]
+        
+        return state_sequence.tolist()
