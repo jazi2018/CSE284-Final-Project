@@ -82,7 +82,14 @@ class Laihmm:
             log_probs[idx][0] = np.log(1 / self.num_ancestries)
         
         log_emissions = np.log(self.emissions)
-        log_transition = np.log(self.transition_probability)
+
+        #probability to transition to self
+        self_transition = 1 - self.transition_probability
+        #probability to transition to any other
+        other_transition = self.transition_probability / (self.num_ancestries - 1)
+        log_transition = np.full((self.num_ancestries, self.num_ancestries), np.log(other_transition))
+        #fill out our transition matrix
+        log_transition = np.fill_diagonal(log_transition, np.log(self_transition))
 
         for t in range(self.num_snps - 1):
             snp = target_genotype[t + 1]
