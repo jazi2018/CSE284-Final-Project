@@ -97,7 +97,7 @@ class Laihmm:
         log_emissions = np.log(self.emissions)
 
         #Viterbi forward pass
-        for t in range(self.num_snps - 1):
+        for t in tqdm(range(self.num_snps - 1)):
             snp = target_genotype[t + 1]
             
             #score[i, j] = log P(state i at SNP t) + log P(transitioning from state i to state j)
