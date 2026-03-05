@@ -2,21 +2,48 @@
 A python implementation of the FLARE local ancestry inference model detailed by Browning et al. 2023
 
 ## Installation
-installation instructions
+To install this tool, start by cloning the repository:
 
-### How do I install this tool?
+``` bash
+git clone https://github.com/jazi2018/CSE284-Final-Project.git
+```
+Navigate to the repository directory and (optional but recommended) create a virtual environment
+``` bash
+python -m venv env
+```
+Activate your virtual environment and install the required libraries
+``` bash
+pip install -r requirements.txt
+```
+Our model can be imported from `model.py`
+``` python
+from model import Laihmm
+```
+We've included a test script (feel free to modify) called `test.py`. It
+1. Loads data from the data folder
+2. Isolates two samples from different populations. One from CEU, one from YRI.
+3. Generates an emission matrix for the CEU sample and runs the model on it. When calculating accuracy, we make the assumption that the CEU sample has undergone no admixture, and thus their entire genome is attributed to the CEU population.
+4. Performs random admixture on the CEU and YRI population. Our implementation is very inelegant, and we plan on using haptools for future testing.
+5. Generates an emission matrix for the new admixed sample on which the model is run. Accuracy is calculated off the true admixed genotype labels.
 
+`test.py` is relatively slow to run, primarily limited by the time it takes to read in the data, and the time it takes to run the viterbi algorithm. Regardless, feel free to tinker with various parameters, such as the transition probability in the model or the switch probability in the admixing portion.
 
-### What does this tool (currently) do?
-This implementation takes an unphased genotype and returns 
+## Our current model
+Due to the complexity of the FLARE model, we initially implement a simpler model (closer to the model described by Li and Stephens). We intend to implement the FLARE model (described below), but aimed to meet a minimum viable product goal for the peer-review session.
 
-### What are the valid inputs this tool works with?
+### Observations / Emissions
+Our sequence of observations is simply the allele sequence in the target. The emission probability is the allele frequency of the emitted allele.
 
+### States
+The unobserved state at each snp is the ancestry from which the SNP is derived. The model can accept any number of ancestries.
 
-### What kind of output will this tool provide?
+### Transitions
+We assume a constant transition probability $t$, such that the probability to switch to *any* other state is $t$. As such, the transition matrix is an $A \times t$ matrix, where each entry is $\frac{t}{A}$ and the diagonal is $1 - t$.
 
+### Initials
+We assume an equal probability to start in any initial state.
 
-## Model Details
+## FLARE Model Details
 The model detailed in Browning et al. 2023 utilizes a hidden markov model (HMM) to "paint" the genome with ancestral sources.
 
 To simplify implementation, we make the assumption that, for every ancestry $a \in A$, there exists a reference panel $j \in J$ containing only samples of that ancestry. As such, $|J| = |A|$. The original FLARE model in Browing et al. offers the ability to make inferences on datasets where $|J| < |A|$ and $|J| > |A|$, but since the timeframe for implementation of this project is tight, this is a safe assumption which significantly reduces complexity.
