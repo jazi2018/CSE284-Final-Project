@@ -59,24 +59,12 @@ class Laihmm:
         #fill out our transition matrix
         np.fill_diagonal(log_transitions, np.log(self_transition))
 
-        self.log_transitons = log_transitions
+        self.log_transitions = log_transitions
         ################################
     
-    def predict(self, target_genotype: np.ndarray) -> list[int]:
+    def predict(self) -> list[int]:
         """
         Predicts the most likely state sequence through the Viterbi algorithm.
-
-        Parameters
-        -
-        target_haplotype : np.array
-            An array containing the phased haplotypes of some target for every SNP.
-
-            Shape:
-                (1, number of SNPs)
-            
-            Constraints:
-                - n ∈ [0, 1] for n ∈ SNPs
-                - All values are integers
         
         Returns
         -
@@ -89,17 +77,15 @@ class Laihmm:
         log_probs = np.zeros((self.num_ancestries, self.num_snps), dtype=float)
         backtrack = np.zeros((self.num_ancestries, self.num_snps), dtype=int)
 
+        log_emissions = np.log(self.emissions)
         #initials - equal to 1 / |A| (each ancestry is equally likely)
         for idx in range(self.num_ancestries):
             #all operations are done in log space to prevent underflow (and make arithmetic easier)
-            log_probs[idx][0] = np.log(1 / self.num_ancestries)
+            log_probs[idx][0] = np.log(1 / self.num_ancestries) + log_emissions[idx, 0]
         
-        log_emissions = np.log(self.emissions)
 
         #Viterbi forward pass
         for t in tqdm(range(self.num_snps - 1)):
-            snp = target_genotype[t + 1]
-            
             #score[i, j] = log P(state i at SNP t) + log P(transitioning from state i to state j)
             scores = log_probs[:, t][:, None] + self.log_transitions
 
@@ -108,7 +94,7 @@ class Laihmm:
             backtrack[:, t + 1] = np.argmax(scores, axis=0)
 
             #and now find the best probability at each state
-            log_probs[:, t + 1] = np.max(scores, axis=0) + log_emissions[:, snp]
+            log_probs[:, t + 1] = np.max(scores, axis=0) + log_emissions[:, t + 1]
         
         #backtracking to get sequence
         state_sequence = np.zeros(self.num_snps, dtype=int)
@@ -119,6 +105,7 @@ class Laihmm:
             #backtrack was built to encode the best path to each node
             state_sequence[t - 1] = backtrack[state_sequence[t], t]
         
+        print(log_probs, backtrack, sep='\n')
         return state_sequence.tolist()
     
     def update_transition(self, transition_prob: float) -> None:
