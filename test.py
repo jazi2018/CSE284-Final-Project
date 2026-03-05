@@ -1,5 +1,4 @@
 import numpy as np
-from tqdm import tqdm
 from model import Laihmm
 
 
@@ -9,9 +8,8 @@ def main():
     # Load genotype dataset
     # -----------------------------
     print("loading ref genotypes (this is a really big file)")
-    data = np.load("data/chr1_hmm_data.npz")
-
-    ref_genotypes = data["ref_genotypes"]
+    with np.load("data/chr1_hmm_data.npz") as data:
+        ref_genotypes = data["ref_genotypes"]
 
     # -----------------------------
     # Load allele frequencies
