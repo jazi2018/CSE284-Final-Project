@@ -4,6 +4,18 @@ A python implementation of the FLARE local ancestry inference model detailed by 
 ## Installation
 installation instructions
 
+### How do I install this tool?
+
+
+### What does this tool (currently) do?
+This implementation takes an unphased genotype and returns 
+
+### What are the valid inputs this tool works with?
+
+
+### What kind of output will this tool provide?
+
+
 ## Model Details
 The model detailed in Browning et al. 2023 utilizes a hidden markov model (HMM) to "paint" the genome with ancestral sources.
 
