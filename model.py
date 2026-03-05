@@ -105,7 +105,6 @@ class Laihmm:
             #backtrack was built to encode the best path to each node
             state_sequence[t - 1] = backtrack[state_sequence[t], t]
         
-        print(log_probs, backtrack, sep='\n')
         return state_sequence.tolist()
     
     def update_transition(self, transition_prob: float) -> None:
