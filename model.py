@@ -185,8 +185,8 @@ class BetterStatesLaihmm():
 
             #using 1e-100 (a very small epsilon) to handle impossible cases to prevent log(0) errors
             #and ternary operator to prevent division by zero errors
-            self.log_recomb_probs[a] = np.log(self.recombination_prob / num_same_ancestry) if num_same_ancestry > 0 else 1e-100
-            self.log_admixture_probs[a] = np.log(self.admixture_prob / num_different_ancestry) if num_different_ancestry > 0 else 1e-100
+            self.log_recomb_probs[a] = np.log(self.recombination_prob / num_same_ancestry) if num_same_ancestry > 0 else np.log(1e-100)
+            self.log_admixture_probs[a] = np.log(self.admixture_prob / num_different_ancestry) if num_different_ancestry > 0 else np.log(1e-100)
         ################################
 
         #old transition matrix code (for reference)
@@ -253,8 +253,8 @@ class BetterStatesLaihmm():
             raise ValueError("Target haplotype must be the same length as the reference panel.")
         
         #initialize Viterbi matrix
-        log_probs = np.zeros((self.num_ancestries, self.num_snps), dtype=float)
-        backtrack = np.zeros((self.num_ancestries, self.num_snps), dtype=int)
+        log_probs = np.zeros((self.num_donors, self.num_snps), dtype=float)
+        backtrack = np.zeros((self.num_donors, self.num_snps), dtype=int)
         
         ### BUILD EMISISON MATRIX ###
         #make a boolean matrix for our target haplotype matching each donor's haplotype
@@ -326,11 +326,13 @@ class BetterStatesLaihmm():
                 else:
                     backtrack[j, t + 1] = best_admixture_donor
         
-        #backtracking to get sequence - same as previous model
+        #backtracking to get state sequence
         state_sequence = np.zeros(self.num_snps, dtype=int)
         state_sequence[-1] = np.argmax(log_probs[:, -1])
 
         for t in range(self.num_snps - 1, 0, -1):
             state_sequence[t - 1] = backtrack[state_sequence[t], t]
         
-        return state_sequence.tolist()
+        #map to an ancestry sequence and return
+        ancestry_sequence = [self.ancestries[s] for s in state_sequence]
+        return ancestry_sequence
