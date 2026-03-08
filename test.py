@@ -5,8 +5,41 @@ import numpy as np
 from model import Laihmm
 
 
-def main(num_admixed_individuals: int = 10, max_ceu_samples: Optional[int] = None):
+def build_emission_matrix(
+    genotype: np.ndarray,
+    ceu_freqs: np.ndarray,
+    yri_freqs: np.ndarray
+) -> np.ndarray:
+    """
+    Build a 2 x n_snps emission matrix for the given genotype vector.
+    Row 0 = CEU emissions
+    Row 1 = YRI emissions
+    """
+    n_snps = genotype.shape[0]
+    emission_matrix = np.zeros((2, n_snps))
 
+    mask0 = genotype == 0
+    mask1 = genotype == 1
+    mask2 = genotype == 2
+
+    # CEU
+    emission_matrix[0, mask0] = 1 - ceu_freqs[mask0]
+    emission_matrix[0, mask1] = ceu_freqs[mask1]
+    emission_matrix[0, mask2] = ceu_freqs[mask2] ** 2
+
+    # YRI
+    emission_matrix[1, mask0] = 1 - yri_freqs[mask0]
+    emission_matrix[1, mask1] = yri_freqs[mask1]
+    emission_matrix[1, mask2] = yri_freqs[mask2] ** 2
+
+    return emission_matrix
+
+
+def main(
+    num_admixed_individuals: int = 10,
+    max_ceu_samples: Optional[int] = None,
+    yri_sample_index: Optional[int] = None
+):
     # -----------------------------
     # Load genotype dataset
     # -----------------------------
@@ -60,20 +93,31 @@ def main(num_admixed_individuals: int = 10, max_ceu_samples: Optional[int] = Non
 
         if code == "CEU":
             ceu_samples.append(i)
-
         elif code == "YRI":
             yri_samples.append(i)
+
+    if len(ceu_samples) == 0:
+        raise ValueError("No CEU samples found.")
+    if len(yri_samples) == 0:
+        raise ValueError("No YRI samples found.")
+
+    if yri_sample_index is not None:
+        if yri_sample_index < 0 or yri_sample_index >= len(yri_samples):
+            raise ValueError(
+                f"yri_sample_index must be between 0 and {len(yri_samples) - 1}, "
+                f"got {yri_sample_index}."
+            )
 
     # -----------------------------
     # Settings for repeated admixed individuals
     # -----------------------------
     switch_prob = 0.001
-    yri_genotype = ref_genotypes[:, yri_samples[0]]
 
     # -----------------------------
     # Run through CEU reference samples (one-by-one)
     # -----------------------------
-    max_ceu = max_ceu_samples or len(ceu_samples)
+    max_ceu = len(ceu_samples) if max_ceu_samples is None else max_ceu_samples
+
     for ceu_idx, example_sample in enumerate(ceu_samples[:max_ceu], start=1):
         print(f"\n{'=' * 50}")
         print(f"PROCESSING CEU SAMPLE #{ceu_idx} (ref index {example_sample})")
@@ -85,23 +129,7 @@ def main(num_admixed_individuals: int = 10, max_ceu_samples: Optional[int] = Non
         genotype = ref_genotypes[:, example_sample]
 
         print("generating emission matrix")
-        n_snps = genotype.shape[0]
-
-        emission_matrix = np.zeros((2, n_snps))
-
-        mask0 = genotype == 0
-        mask1 = genotype == 1
-        mask2 = genotype == 2
-
-        # CEU
-        emission_matrix[0, mask0] = 1 - ceu_freqs[mask0]
-        emission_matrix[0, mask1] = ceu_freqs[mask1]
-        emission_matrix[0, mask2] = ceu_freqs[mask2] ** 2
-
-        # YRI
-        emission_matrix[1, mask0] = 1 - yri_freqs[mask0]
-        emission_matrix[1, mask1] = yri_freqs[mask1]
-        emission_matrix[1, mask2] = yri_freqs[mask2] ** 2
+        emission_matrix = build_emission_matrix(genotype, ceu_freqs, yri_freqs)
 
         # -----------------------------
         # Run HMM
@@ -126,10 +154,29 @@ def main(num_admixed_individuals: int = 10, max_ceu_samples: Optional[int] = Non
         # Generate and evaluate multiple admixed individuals
         # -----------------------------
         ceu_genotype = genotype
+
         for indiv_num in range(1, num_admixed_individuals + 1):
             print(f"\n{'=' * 50}")
             print(f"PROCESSING ADMIXED INDIVIDUAL #{indiv_num} (CEU sample #{ceu_idx})")
             print(f"{'=' * 50}")
+
+            # -----------------------------
+            # Select YRI sample
+            # -----------------------------
+            if yri_sample_index is None:
+                chosen_yri_pos = np.random.randint(len(yri_samples))
+                print(
+                    f"randomly selected YRI sample position {chosen_yri_pos} "
+                    f"(ref index {yri_samples[chosen_yri_pos]})"
+                )
+            else:
+                chosen_yri_pos = yri_sample_index
+                print(
+                    f"using fixed YRI sample position {chosen_yri_pos} "
+                    f"(ref index {yri_samples[chosen_yri_pos]})"
+                )
+
+            yri_genotype = ref_genotypes[:, yri_samples[chosen_yri_pos]]
 
             # -----------------------------
             # Make fake admixed sample
@@ -153,31 +200,15 @@ def main(num_admixed_individuals: int = 10, max_ceu_samples: Optional[int] = Non
             admixed = np.where(ancestry == 0, ceu_genotype, yri_genotype)
 
             # -----------------------------
-            # Re-generate emissions matrix
+            # Build emission matrix
             # -----------------------------
             print("generating emission matrix for admixed individual")
-            n_snps = admixed.shape[0]
-
-            emission_matrix = np.zeros((2, n_snps))
-
-            mask0 = admixed == 0
-            mask1 = admixed == 1
-            mask2 = admixed == 2
-
-            # CEU
-            emission_matrix[0, mask0] = 1 - ceu_freqs[mask0]
-            emission_matrix[0, mask1] = ceu_freqs[mask1]
-            emission_matrix[0, mask2] = ceu_freqs[mask2] ** 2
-
-            # YRI
-            emission_matrix[1, mask0] = 1 - yri_freqs[mask0]
-            emission_matrix[1, mask1] = yri_freqs[mask1]
-            emission_matrix[1, mask2] = yri_freqs[mask2] ** 2
+            emission_matrix = build_emission_matrix(admixed, ceu_freqs, yri_freqs)
 
             # -----------------------------
             # Run HMM
             # -----------------------------
-            print(f"Running HMM for admixed individual number {indiv_num}")
+            print(f"running HMM for admixed individual number {indiv_num}")
             model = Laihmm(emission_matrix)
             predictions = model.predict()
 
@@ -194,7 +225,6 @@ def main(num_admixed_individuals: int = 10, max_ceu_samples: Optional[int] = Non
             print(f"number of errors: {errors}")
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run HMM on reference and simulated admixed individuals."
@@ -204,7 +234,7 @@ if __name__ == "__main__":
         "-n",
         type=int,
         default=1000,
-        help="Number of admixed individuals to generate and evaluate.",
+        help="Number of admixed individuals to generate and evaluate per CEU sample.",
     )
     parser.add_argument(
         "--max-ceu",
@@ -212,6 +242,19 @@ if __name__ == "__main__":
         default=None,
         help="Maximum number of CEU reference samples to iterate through (default: all).",
     )
+    parser.add_argument(
+        "--yri-sample-index",
+        type=int,
+        default=None,
+        help=(
+            "0-based index into the YRI sample list to force a fixed YRI sample. "
+            "If omitted, a random YRI sample is chosen for each admixed individual."
+        ),
+    )
 
     args = parser.parse_args()
-    main(num_admixed_individuals=args.num_admixed, max_ceu_samples=args.max_ceu)
+    main(
+        num_admixed_individuals=args.num_admixed,
+        max_ceu_samples=args.max_ceu,
+        yri_sample_index=args.yri_sample_index
+    )
