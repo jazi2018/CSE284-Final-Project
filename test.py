@@ -1,8 +1,9 @@
+import argparse
 import numpy as np
 from model import Laihmm
 
 
-def main():
+def main(num_admixed_individuals: int = 1000):
 
     # -----------------------------
     # Load genotype dataset
@@ -110,69 +111,95 @@ def main():
     print(f"number of errors: {errors}\n")
 
     # -----------------------------
-    # Make fake admixed sample (just for testing - should be using haptools)
+    # Settings for repeated admixed individuals
     # -----------------------------
-    print("generating admixed sample")
-    n = genotype.shape[0]
     switch_prob = 0.001
 
-    ancestry = np.zeros(n, dtype=int)
-    current = np.random.randint(2)
-    
-    swaps = 0
-    for i in range(n):
-        if np.random.rand() < switch_prob:
-            swaps +=1
-            current = 1 - current
-
-        ancestry[i] = current
-    print(f"\ttotal swaps: {swaps}")
     ceu_genotype = ref_genotypes[:, example_sample]
     yri_genotype = ref_genotypes[:, yri_samples[0]]
 
-    admixed = np.where(ancestry == 0, ceu_genotype, yri_genotype)
-
     # -----------------------------
-    # Re-generate emissions matrix
+    # Generate and evaluate multiple admixed individuals
     # -----------------------------
-    print("generating emission matrix for admixed individual")
-    n_snps = admixed.shape[0]
+    for indiv_num in range(1, num_admixed_individuals + 1):
+        print(f"\n{'=' * 50}")
+        print(f"PROCESSING ADMIXED INDIVIDUAL #{indiv_num}")
+        print(f"{'=' * 50}")
 
-    emission_matrix = np.zeros((2, n_snps))
+        # -----------------------------
+        # Make fake admixed sample
+        # -----------------------------
+        print("generating admixed sample")
+        n = genotype.shape[0]
 
-    mask0 = admixed == 0
-    mask1 = admixed == 1
-    mask2 = admixed == 2
+        ancestry = np.zeros(n, dtype=int)
+        current = np.random.randint(2)
 
-    # CEU
-    emission_matrix[0, mask0] = 1 - ceu_freqs[mask0]
-    emission_matrix[0, mask1] = ceu_freqs[mask1]
-    emission_matrix[0, mask2] = ceu_freqs[mask2] ** 2
+        swaps = 0
+        for i in range(n):
+            if np.random.rand() < switch_prob:
+                swaps += 1
+                current = 1 - current
 
-    # YRI
-    emission_matrix[1, mask0] = 1 - yri_freqs[mask0]
-    emission_matrix[1, mask1] = yri_freqs[mask1]
-    emission_matrix[1, mask2] = yri_freqs[mask2] ** 2
+            ancestry[i] = current
 
-    # -----------------------------
-    # Run HMM
-    # -----------------------------
-    print("running HMM for admixed individual")
-    model = Laihmm(emission_matrix)
-    predictions = model.predict()
+        print(f"\ttotal swaps: {swaps}")
 
-    # -----------------------------
-    # Evaluate
-    # -----------------------------
-    print("\nRESULTS FOR ADMIXED:")
-    predictions = np.array(predictions)
+        admixed = np.where(ancestry == 0, ceu_genotype, yri_genotype)
 
-    errors = np.sum(predictions != ancestry)
-    accuracy = (len(predictions) - errors) / len(predictions)
+        # -----------------------------
+        # Re-generate emissions matrix
+        # -----------------------------
+        print("generating emission matrix for admixed individual")
+        n_snps = admixed.shape[0]
 
-    print(f"accuracy: {accuracy}")
-    print(f"number of errors: {errors}")
+        emission_matrix = np.zeros((2, n_snps))
+
+        mask0 = admixed == 0
+        mask1 = admixed == 1
+        mask2 = admixed == 2
+
+        # CEU
+        emission_matrix[0, mask0] = 1 - ceu_freqs[mask0]
+        emission_matrix[0, mask1] = ceu_freqs[mask1]
+        emission_matrix[0, mask2] = ceu_freqs[mask2] ** 2
+
+        # YRI
+        emission_matrix[1, mask0] = 1 - yri_freqs[mask0]
+        emission_matrix[1, mask1] = yri_freqs[mask1]
+        emission_matrix[1, mask2] = yri_freqs[mask2] ** 2
+
+        # -----------------------------
+        # Run HMM
+        # -----------------------------
+        print(f"Running HMM for admixed individual number {indiv_num}")
+        model = Laihmm(emission_matrix)
+        predictions = model.predict()
+
+        # -----------------------------
+        # Evaluate
+        # -----------------------------
+        print(f"\nRESULTS FOR ADMIXED INDIVIDUAL #{indiv_num}:")
+        predictions = np.array(predictions)
+
+        errors = np.sum(predictions != ancestry)
+        accuracy = (len(predictions) - errors) / len(predictions)
+
+        print(f"accuracy: {accuracy}")
+        print(f"number of errors: {errors}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Run HMM on reference and simulated admixed individuals."
+    )
+    parser.add_argument(
+        "--num-admixed",
+        "-n",
+        type=int,
+        default=1000,
+        help="Number of admixed individuals to generate and evaluate.",
+    )
+
+    args = parser.parse_args()
+    main(num_admixed_individuals=args.num_admixed)
