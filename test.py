@@ -3,7 +3,7 @@ import numpy as np
 from model import Laihmm
 
 
-def main(num_admixed_individuals: int = 1000):
+def main(num_admixed_individuals: int = 10):
 
     # -----------------------------
     # Load genotype dataset
