@@ -92,13 +92,30 @@ def main():
     parser.add_argument("--error-rate", type=float, default=0.01)
     args = parser.parse_args()
 
+    print("=" * 70)
+    print("LOADING INPUTS FOR MY METHOD")
+    print("=" * 70)
+
     reference_panel = np.load(args.reference_panel_npy)
-    _, ancestry_names = read_labels(args.labels_tsv)
+    print(f"Loaded reference panel: {args.reference_panel_npy}")
+    print(f"Reference panel shape: {reference_panel.shape}")
+
+    donor_ids, ancestry_names = read_labels(args.labels_tsv)
+    print(f"Loaded labels: {args.labels_tsv}")
+    print(f"Number of donor haplotypes in labels: {len(donor_ids)}")
+
     ancestry_index = read_ancestry_index(args.ancestry_index_tsv)
+    print(f"Loaded ancestry index: {args.ancestry_index_tsv}")
+    print(f"Ancestry index mapping: {ancestry_index}")
 
     ancestry_labels_numeric = np.array([ancestry_index[a] for a in ancestry_names], dtype=int)
 
     sample_ids, chrom, positions, hap1_matrix, hap2_matrix = parse_phased_vcf(args.study_vcf)
+    print(f"Loaded study VCF: {args.study_vcf}")
+    print(f"Number of study samples: {len(sample_ids)}")
+    print(f"Chromosome: {chrom}")
+    print(f"Number of SNPs: {len(positions)}")
+    print(f"Haplotype matrix shapes: hap1={hap1_matrix.shape}, hap2={hap2_matrix.shape}")
 
     model = BetterStatesLaihmm(
         reference_panel=reference_panel,
@@ -109,6 +126,10 @@ def main():
 
     out_path = Path(args.out_tsv_gz)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print("=" * 70)
+    print("RUNNING MY METHOD")
+    print("=" * 70)
 
     start = time.perf_counter()
 
@@ -125,10 +146,28 @@ def main():
             "pred_prob"
         ])
 
-        for sample_idx, sample_id in enumerate(sample_ids):
-            pred_h1 = np.asarray(model.predict(hap1_matrix[sample_idx, :], error_rate=args.error_rate), dtype=int)
-            pred_h2 = np.asarray(model.predict(hap2_matrix[sample_idx, :], error_rate=args.error_rate), dtype=int)
+        total_samples = len(sample_ids)
 
+        for sample_idx, sample_id in enumerate(sample_ids, start=1):
+            print("\n" + "-" * 70)
+            print(f"Processing sample {sample_idx}/{total_samples}: {sample_id}")
+            print("-" * 70)
+
+            print(f"  Running haplotype 1 for sample {sample_id} ...")
+            pred_h1 = np.asarray(
+                model.predict(hap1_matrix[sample_idx - 1, :], error_rate=args.error_rate),
+                dtype=int
+            )
+            print(f"  Finished haplotype 1 for sample {sample_id}")
+
+            print(f"  Running haplotype 2 for sample {sample_id} ...")
+            pred_h2 = np.asarray(
+                model.predict(hap2_matrix[sample_idx - 1, :], error_rate=args.error_rate),
+                dtype=int
+            )
+            print(f"  Finished haplotype 2 for sample {sample_id}")
+
+            print(f"  Writing predictions for sample {sample_id} ...")
             for snp_idx, pos in enumerate(positions):
                 marker_id = f"rs{snp_idx + 1}"
                 writer.writerow([
@@ -152,6 +191,8 @@ def main():
                     ""
                 ])
 
+            print(f"  Done writing sample {sample_id}")
+
     elapsed = time.perf_counter() - start
 
     runtime_path = out_path.with_suffix("").with_suffix(".runtime.tsv")
@@ -160,8 +201,12 @@ def main():
         writer.writerow(["method", "seconds", "n_samples", "n_snps"])
         writer.writerow(["my_method", elapsed, len(sample_ids), len(positions)])
 
+    print("\n" + "=" * 70)
+    print("MY METHOD FINISHED")
+    print("=" * 70)
     print(f"Wrote predictions to {out_path}")
     print(f"Wrote runtime to {runtime_path}")
+    print(f"Elapsed time: {elapsed:.2f} seconds")
 
 
 if __name__ == "__main__":
