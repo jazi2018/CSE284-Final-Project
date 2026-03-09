@@ -4,7 +4,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(pwd)"
 DATA_DIR="${PROJECT_DIR}/data"
-BENCH_DIR="${PROJECT_DIR}/benchmark_chr21"
+BENCH_DIR="${PROJECT_DIR}/benchmark_chr21_small"
+FULL_BENCH_DIR="${PROJECT_DIR}/benchmark_chr21"
 RESULTS_DIR="${PROJECT_DIR}/benchmark_results_chr21"
 SCORED_DIR="${PROJECT_DIR}/benchmark_scored_chr21"
 
@@ -16,26 +17,57 @@ R_BIN="Rscript"
 mkdir -p "${BENCH_DIR}" "${RESULTS_DIR}" "${SCORED_DIR}"
 
 echo "===================================="
-echo "Step 1: Build benchmark inputs"
+echo "Step 1: Ensure benchmark inputs exist"
 echo "===================================="
 
-# Sentinel files that indicate Step 1 already completed
+mkdir -p "${FULL_BENCH_DIR}" "${RESULTS_DIR}" "${SCORED_DIR}"
+
 REF_PANEL_FILE="${BENCH_DIR}/reference_panel.npy"
 STUDY_VCF_FILE="${BENCH_DIR}/study.vcf"
 
 if [[ -f "${REF_PANEL_FILE}" && -f "${STUDY_VCF_FILE}" ]]; then
-    echo "Benchmark inputs already exist — skipping Step 1."
+    echo "Benchmark inputs already exist in ${BENCH_DIR} — skipping Step 1."
 else
-    echo "Benchmark inputs missing — building them now."
+    echo "Benchmark inputs missing in ${BENCH_DIR}."
 
-    "${PYTHON_BIN}" build_benchmark_inputs.py \
-      --npz "${DATA_DIR}/chr21_hmm_data.npz" \
-      --ref-samples "${DATA_DIR}/ref_samples.txt" \
-      --query-samples "${DATA_DIR}/query_samples.txt" \
-      --igsr "${DATA_DIR}/igsr_samples.tsv" \
-      --bp "${DATA_DIR}/sim_admixed_chr21.bp" \
-      --outdir "${BENCH_DIR}" \
-      --chrom 21
+    # If BENCH_DIR is the full benchmark directory, build from raw inputs
+    if [[ "${BENCH_DIR}" == "${FULL_BENCH_DIR}" ]]; then
+        echo "Building full benchmark inputs from raw data..."
+        mkdir -p "${FULL_BENCH_DIR}"
+
+        "${PYTHON_BIN}" build_benchmark_inputs.py \
+          --npz "${DATA_DIR}/chr21_hmm_data.npz" \
+          --ref-samples "${DATA_DIR}/ref_samples.txt" \
+          --query-samples "${DATA_DIR}/query_samples.txt" \
+          --igsr "${DATA_DIR}/igsr_samples.tsv" \
+          --bp "${DATA_DIR}/sim_admixed_chr21.bp" \
+          --outdir "${FULL_BENCH_DIR}" \
+          --chrom 21
+    else
+        echo "Subset benchmark inputs requested."
+        echo "Building full benchmark first if needed..."
+
+        if [[ ! -f "${FULL_BENCH_DIR}/reference_panel.npy" || ! -f "${FULL_BENCH_DIR}/study.vcf" ]]; then
+            mkdir -p "${FULL_BENCH_DIR}"
+
+            "${PYTHON_BIN}" build_benchmark_inputs.py \
+              --npz "${DATA_DIR}/chr21_hmm_data.npz" \
+              --ref-samples "${DATA_DIR}/ref_samples.txt" \
+              --query-samples "${DATA_DIR}/query_samples.txt" \
+              --igsr "${DATA_DIR}/igsr_samples.tsv" \
+              --bp "${DATA_DIR}/sim_admixed_chr21.bp" \
+              --outdir "${FULL_BENCH_DIR}" \
+              --chrom 21
+        fi
+
+        echo "Creating subset benchmark inputs..."
+        "${PYTHON_BIN}" subset_benchmark_inputs.py \
+          --input-dir "${FULL_BENCH_DIR}" \
+          --output-dir "${BENCH_DIR}" \
+          --max-ref-samples 50 \
+          --max-query-samples 10 \
+          --max-snps 20000
+    fi
 fi
 
 
@@ -73,11 +105,12 @@ fi
   --map "${BENCH_DIR}/genetic_map.tsv" \
   --out-prefix "${RESULTS_DIR}/flare_run" \
   --parsed-out-tsv-gz "${RESULTS_DIR}/flare.tsv.gz" \
+  --ancestry-index-tsv "${BENCH_DIR}/ancestry_index.tsv" \
   --java-mem-gb 8 \
   --nthreads 4 \
   --seed 1 \
-  --probs
-
+  --probs \
+  --extra-args min-mac=1 min-maf=0
 
 echo
 echo "===================================="

@@ -6,32 +6,95 @@ import gzip
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
+
+
+def read_ancestry_index_tsv(path: str) -> Dict[str, int]:
+    out = {}
+    with open(path, "r", newline="") as f:
+        reader = csv.reader(f, delimiter="\t")
+        next(reader)
+        for row in reader:
+            out[row[0]] = int(row[1])
+    return out
+
+
+def read_ref_panel_ancestry_order(path: str) -> Dict[str, int]:
+    """
+    FLARE docs: if no model file is provided, ancestry indices are determined by
+    the reference panel names in the ref-panel file in the order they appear.
+    Return ancestry_name -> local_FLARE_id.
+    """
+    seen = {}
+    next_id = 0
+    with open(path, "r", newline="") as f:
+        reader = csv.reader(f, delimiter="\t")
+        for row in reader:
+            if not row:
+                continue
+            ancestry_name = row[1]
+            if ancestry_name not in seen:
+                seen[ancestry_name] = next_id
+                next_id += 1
+    return seen
 
 
 def parse_flare_ancestry_header(vcf_gz_path: str) -> Dict[str, int]:
     """
-    Parse FLARE ##ANCESTRY meta-lines, returning ancestry_name -> index.
+    Best-effort parser for FLARE ##ANCESTRY meta-lines.
+    Returns ancestry_name -> local FLARE ID.
     """
     ancestry_map = {}
     with gzip.open(vcf_gz_path, "rt") as f:
         for line in f:
             if line.startswith("##ANCESTRY="):
-                # Example-ish pattern: ##ANCESTRY=<ID=0,Name=CEU>
-                body = line.strip()[len("##ANCESTRY=<"):-1]
-                fields = {}
-                for part in body.split(","):
-                    key, value = part.split("=", 1)
-                    fields[key] = value
-                if "ID" in fields and "Name" in fields:
-                    ancestry_map[fields["Name"]] = int(fields["ID"])
+                body = line.strip()
+
+                # Expected example from docs:
+                # ##ANCESTRY=<ID=0,Name=CEU>
+                if body.startswith("##ANCESTRY=<") and body.endswith(">"):
+                    body = body[len("##ANCESTRY=<"):-1]
+                    fields = {}
+                    for part in body.split(","):
+                        if "=" in part:
+                            key, value = part.split("=", 1)
+                            fields[key] = value
+                    if "ID" in fields and "Name" in fields:
+                        ancestry_map[fields["Name"]] = int(fields["ID"])
+
             elif line.startswith("#CHROM"):
                 break
+
     return ancestry_map
 
 
-def parse_flare_anc_vcf(vcf_gz_path: str, out_tsv_gz: str) -> None:
-    ancestry_map = parse_flare_ancestry_header(vcf_gz_path)
+def parse_flare_anc_vcf(
+    vcf_gz_path: str,
+    out_tsv_gz: str,
+    ref_panel_path: str,
+    ancestry_index_tsv: str | None = None
+) -> None:
+    """
+    Parse FLARE .anc.vcf.gz output into the standardized TSV.GZ format expected by score_methods.py.
+
+    Remapping logic:
+    1. Try ##ANCESTRY header lines from the FLARE output VCF
+    2. If absent, fall back to ancestry order in ref_panel.tsv
+    3. If ancestry_index_tsv is provided, remap by ancestry name to benchmark indices
+    """
+    ancestry_name_to_local = parse_flare_ancestry_header(vcf_gz_path)
+
+    if not ancestry_name_to_local:
+        ancestry_name_to_local = read_ref_panel_ancestry_order(ref_panel_path)
+
+    id_remap = None
+    if ancestry_index_tsv is not None:
+        ancestry_name_to_target = read_ancestry_index_tsv(ancestry_index_tsv)
+        id_remap = {
+            local_id: ancestry_name_to_target[name]
+            for name, local_id in ancestry_name_to_local.items()
+            if name in ancestry_name_to_target
+        }
 
     with gzip.open(vcf_gz_path, "rt") as fin, gzip.open(out_tsv_gz, "wt", newline="") as fout:
         writer = csv.writer(fout, delimiter="\t")
@@ -66,29 +129,48 @@ def parse_flare_anc_vcf(vcf_gz_path: str, out_tsv_gz: str) -> None:
 
             fmt_index = {key: i for i, key in enumerate(fmt)}
 
+            if "AN1" not in fmt_index or "AN2" not in fmt_index:
+                raise ValueError(
+                    "FLARE output VCF is missing AN1/AN2 fields. "
+                    "Was this actually a FLARE .anc.vcf.gz file?"
+                )
+
             has_anp1 = "ANP1" in fmt_index
             has_anp2 = "ANP2" in fmt_index
 
             for sample_id, sample_field in zip(sample_ids, samples):
                 vals = sample_field.split(":")
-                an1 = int(vals[fmt_index["AN1"]])
-                an2 = int(vals[fmt_index["AN2"]])
+
+                flare_local_an1 = int(vals[fmt_index["AN1"]])
+                flare_local_an2 = int(vals[fmt_index["AN2"]])
+
+                an1 = flare_local_an1
+                an2 = flare_local_an2
+
+                if id_remap is not None:
+                    if an1 not in id_remap or an2 not in id_remap:
+                        raise ValueError(
+                            f"Could not remap FLARE ancestry IDs ({an1}, {an2}) using "
+                            f"{ancestry_index_tsv}. "
+                            f"Derived ancestry-name-to-local map: {ancestry_name_to_local}"
+                        )
+                    an1 = id_remap[an1]
+                    an2 = id_remap[an2]
 
                 prob1 = ""
                 prob2 = ""
 
                 if has_anp1:
                     anp1 = vals[fmt_index["ANP1"]]
-                    # ANP1 likely a comma-separated vector in ancestry index order
                     pvec1 = [float(x) for x in anp1.split(",")]
-                    if 0 <= an1 < len(pvec1):
-                        prob1 = pvec1[an1]
+                    if 0 <= flare_local_an1 < len(pvec1):
+                        prob1 = pvec1[flare_local_an1]
 
                 if has_anp2:
                     anp2 = vals[fmt_index["ANP2"]]
                     pvec2 = [float(x) for x in anp2.split(",")]
-                    if 0 <= an2 < len(pvec2):
-                        prob2 = pvec2[an2]
+                    if 0 <= flare_local_an2 < len(pvec2):
+                        prob2 = pvec2[flare_local_an2]
 
                 writer.writerow([
                     "flare",
@@ -121,6 +203,11 @@ def main():
     parser.add_argument("--map", required=True, help="PLINK-format genetic map.")
     parser.add_argument("--out-prefix", required=True, help="FLARE output prefix.")
     parser.add_argument("--parsed-out-tsv-gz", required=True, help="Standardized parsed output TSV.GZ.")
+    parser.add_argument(
+        "--ancestry-index-tsv",
+        default=None,
+        help="Optional benchmark ancestry_index.tsv used to remap FLARE ancestry IDs by name."
+    )
     parser.add_argument("--java-mem-gb", type=int, default=4, help="Java -Xmx memory in GB.")
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1)
@@ -150,11 +237,27 @@ def main():
     print(" ".join(flare_cmd))
 
     start = time.perf_counter()
-    subprocess.run(flare_cmd, check=True)
+    result = subprocess.run(
+        flare_cmd,
+        text=True,
+        capture_output=True
+    )
+
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+
+    result.check_returncode()
     elapsed = time.perf_counter() - start
 
     anc_vcf = f"{args.out_prefix}.anc.vcf.gz"
-    parse_flare_anc_vcf(anc_vcf, args.parsed_out_tsv_gz)
+    parse_flare_anc_vcf(
+        anc_vcf,
+        args.parsed_out_tsv_gz,
+        ref_panel_path=args.ref_panel,
+        ancestry_index_tsv=args.ancestry_index_tsv
+    )
 
     runtime_path = f"{args.out_prefix}.runtime.tsv"
     with open(runtime_path, "w", newline="") as f:

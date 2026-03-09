@@ -24,100 +24,143 @@ per_sample_files <- list.files(
 dir.create(file.path(scored_dir, "figures"), showWarnings = FALSE)
 fig_dir <- file.path(scored_dir, "figures")
 
+safe_boxplot <- function(formula, data, filename, main, ylab) {
+  mf <- model.frame(formula, data = data)
+  y <- mf[[1]]
+  ok <- is.finite(y)
+
+  png(filename, width = 1000, height = 700)
+  if (!any(ok)) {
+    plot.new()
+    text(0.5, 0.5, "No finite values to plot")
+  } else {
+    boxplot(
+      formula,
+      data = data[ok, , drop = FALSE],
+      main = main,
+      ylab = ylab,
+      ylim = c(0, 1)
+    )
+  }
+  dev.off()
+}
+
+safe_barplot <- function(values, names_arg, filename, main, ylab) {
+  vals <- suppressWarnings(as.numeric(values))
+  ok <- is.finite(vals)
+
+  png(filename, width = 1000, height = 700)
+  if (!any(ok)) {
+    plot.new()
+    text(0.5, 0.5, "No finite values to plot")
+  } else {
+    barplot(
+      height = vals[ok],
+      names.arg = names_arg[ok],
+      main = main,
+      ylab = ylab,
+      ylim = c(0, 1)
+    )
+  }
+  dev.off()
+}
+
 # -----------------------------
 # Overall barplots
 # -----------------------------
-png(file.path(fig_dir, "overall_haplotype_r2.png"), width = 1000, height = 700)
-barplot(
-  height = overall$hap_r2,
-  names.arg = overall$method,
+safe_barplot(
+  values = overall$hap_r2,
+  names_arg = overall$method,
+  filename = file.path(fig_dir, "overall_haplotype_r2.png"),
   main = "Haplotype-level R-squared by method",
-  ylab = expression(R^2),
-  ylim = c(0, 1)
+  ylab = expression(R^2)
 )
-dev.off()
 
-png(file.path(fig_dir, "overall_dosage_r2.png"), width = 1000, height = 700)
-barplot(
-  height = overall$dose_r2,
-  names.arg = overall$method,
+safe_barplot(
+  values = overall$dose_r2,
+  names_arg = overall$method,
+  filename = file.path(fig_dir, "overall_dosage_r2.png"),
   main = "Diploid ancestry dosage R-squared by method",
-  ylab = expression(R^2),
-  ylim = c(0, 1)
+  ylab = expression(R^2)
 )
-dev.off()
 
-png(file.path(fig_dir, "overall_haplotype_accuracy.png"), width = 1000, height = 700)
-barplot(
-  height = overall$hap_accuracy,
-  names.arg = overall$method,
+safe_barplot(
+  values = overall$hap_accuracy,
+  names_arg = overall$method,
+  filename = file.path(fig_dir, "overall_haplotype_accuracy.png"),
   main = "Haplotype-level accuracy by method",
-  ylab = "Accuracy",
-  ylim = c(0, 1)
+  ylab = "Accuracy"
 )
-dev.off()
 
-png(file.path(fig_dir, "overall_dosage_accuracy.png"), width = 1000, height = 700)
-barplot(
-  height = overall$dose_accuracy,
-  names.arg = overall$method,
+safe_barplot(
+  values = overall$dose_accuracy,
+  names_arg = overall$method,
+  filename = file.path(fig_dir, "overall_dosage_accuracy.png"),
   main = "Diploid ancestry dosage accuracy by method",
-  ylab = "Accuracy",
-  ylim = c(0, 1)
+  ylab = "Accuracy"
 )
-dev.off()
 
 # -----------------------------
 # Per-sample boxplots
 # -----------------------------
-all_per_sample <- do.call(
-  rbind,
-  lapply(per_sample_files, function(fp) {
-    x <- read.delim(fp, stringsAsFactors = FALSE, check.names = FALSE)
-    method <- sub("\\.per_sample_summary\\.tsv$", "", basename(fp))
-    x$method <- method
-    x
-  })
-)
+if (length(per_sample_files) == 0) {
+  message("No per-sample summary files found; writing placeholder plots.")
 
-png(file.path(fig_dir, "per_sample_haplotype_r2_boxplot.png"), width = 1000, height = 700)
-boxplot(
-  hap_r2 ~ method,
-  data = all_per_sample,
-  main = "Per-sample haplotype-level R-squared",
-  ylab = expression(R^2),
-  ylim = c(0, 1)
-)
-dev.off()
+  placeholder_files <- c(
+    "per_sample_haplotype_r2_boxplot.png",
+    "per_sample_dosage_r2_boxplot.png",
+    "per_sample_haplotype_accuracy_boxplot.png",
+    "per_sample_dosage_accuracy_boxplot.png"
+  )
 
-png(file.path(fig_dir, "per_sample_dosage_r2_boxplot.png"), width = 1000, height = 700)
-boxplot(
-  dose_r2 ~ method,
-  data = all_per_sample,
-  main = "Per-sample diploid ancestry dosage R-squared",
-  ylab = expression(R^2),
-  ylim = c(0, 1)
-)
-dev.off()
+  for (fn in placeholder_files) {
+    png(file.path(fig_dir, fn), width = 1000, height = 700)
+    plot.new()
+    text(0.5, 0.5, "No per-sample summary files found")
+    dev.off()
+  }
+} else {
+  all_per_sample <- do.call(
+    rbind,
+    lapply(per_sample_files, function(fp) {
+      x <- read.delim(fp, stringsAsFactors = FALSE, check.names = FALSE)
+      method <- sub("\\.per_sample_summary\\.tsv$", "", basename(fp))
+      x$method <- method
+      x
+    })
+  )
 
-png(file.path(fig_dir, "per_sample_haplotype_accuracy_boxplot.png"), width = 1000, height = 700)
-boxplot(
-  hap_accuracy ~ method,
-  data = all_per_sample,
-  main = "Per-sample haplotype-level accuracy",
-  ylab = "Accuracy",
-  ylim = c(0, 1)
-)
-dev.off()
+  safe_boxplot(
+    hap_r2 ~ method,
+    data = all_per_sample,
+    filename = file.path(fig_dir, "per_sample_haplotype_r2_boxplot.png"),
+    main = "Per-sample haplotype-level R-squared",
+    ylab = expression(R^2)
+  )
 
-png(file.path(fig_dir, "per_sample_dosage_accuracy_boxplot.png"), width = 1000, height = 700)
-boxplot(
-  dose_accuracy ~ method,
-  data = all_per_sample,
-  main = "Per-sample diploid ancestry dosage accuracy",
-  ylab = "Accuracy",
-  ylim = c(0, 1)
-)
-dev.off()
+  safe_boxplot(
+    dose_r2 ~ method,
+    data = all_per_sample,
+    filename = file.path(fig_dir, "per_sample_dosage_r2_boxplot.png"),
+    main = "Per-sample diploid ancestry dosage R-squared",
+    ylab = expression(R^2)
+  )
+
+  safe_boxplot(
+    hap_accuracy ~ method,
+    data = all_per_sample,
+    filename = file.path(fig_dir, "per_sample_haplotype_accuracy_boxplot.png"),
+    main = "Per-sample haplotype-level accuracy",
+    ylab = "Accuracy"
+  )
+
+  safe_boxplot(
+    dose_accuracy ~ method,
+    data = all_per_sample,
+    filename = file.path(fig_dir, "per_sample_dosage_accuracy_boxplot.png"),
+    main = "Per-sample diploid ancestry dosage accuracy",
+    ylab = "Accuracy"
+  )
+}
 
 cat("Wrote figures to:", fig_dir, "\n")
