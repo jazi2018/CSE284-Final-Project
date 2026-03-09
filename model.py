@@ -334,5 +334,5 @@ class BetterStatesLaihmm():
             state_sequence[t - 1] = backtrack[state_sequence[t], t]
         
         #map to an ancestry sequence and return
-        ancestry_sequence = [self.ancestries[s] for s in state_sequence]
+        ancestry_sequence = [self.ancestry_labels[s] for s in state_sequence]
         return ancestry_sequence
