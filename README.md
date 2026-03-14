@@ -35,45 +35,32 @@ There also exists a notebook version of it (`test_unified.ipynb`), which contain
 pip install ipykernel matplotlib
 ```
 
-## Our current model
-Due to the complexity of the FLARE model, we initially implement a simpler model (closer to the model described by Li and Stephens). We intend to implement the FLARE model (described below), but aimed to meet a minimum viable product goal for the peer-review session.
+## Laihmm
+Due to the complexity of the FLARE model, we initially implement a simpler model (closer to the model described by Li and Stephens).
 
 ### Observations / Emissions
 Our sequence of observations is simply the allele sequence in the target. The emission probability is the allele frequency of the emitted allele.
 
 ### States
-The unobserved state at each snp is the ancestry from which the SNP is derived. The model can accept any number of ancestries.
+The unobserved state at each SNP is the ancestry from which the SNP is derived. The model can accept any number of ancestries.
 
 ### Transitions
-We assume a constant transition probability $t$, such that the probability to switch to *any* other state is $t$. As such, the transition matrix is an $A \times t$ matrix, where each entry is $\frac{t}{A}$ and the diagonal is $1 - t$.
+We assume a constant transition probability $t$, such that the probability to switch to *any* other state is $t$. As such, the transition matrix is an $A \times t$ matrix, where each entry is $\frac{t}{|A|}$ and the diagonal is $1 - t$.
 
 ### Initials
 We assume an equal probability to start in any initial state.
 
-## FLARE Model Details
-The model detailed in Browning et al. 2023 utilizes a hidden markov model (HMM) to "paint" the genome with ancestral sources.
+## BetterStatesLaihmm
+An improvement upon the previous model, which utilizes a wider state space to account for multiple donors across multiple ancestries.
 
-To simplify implementation, we make the assumption that, for every ancestry $a \in A$, there exists a reference panel $j \in J$ containing only samples of that ancestry. As such, $|J| = |A|$. The original FLARE model in Browing et al. offers the ability to make inferences on datasets where $|J| < |A|$ and $|J| > |A|$, but since the timeframe for implementation of this project is tight, this is a safe assumption which significantly reduces complexity.
-
-We also make the assumption that data provided to the model comes from a SNP array in a VCF file, is phased, and comes with a genetic map which can be used to calculate distance in Morgans between SNPs.
-
-### Observations / Emissions
-Our observations are the sequence of alleles in some target individual's phased haplotype. The emission probability $P(O_m \mid S_m)$ depends on parameters which are learned through the Baum-Welch algorithm. More details can be found in the Supplementary Methods section of Browning et al. 2023.
+### Observations / Initials
+Our observations and initial probability distribution are identical to the previous model.
 
 ### States
-The unobserved state at marker $m$ is $S_m = (i, h)$, where $i$ is is the ancestry of $m$ and the donor reference haploytpe $h$.
+The unobserved state at each SNP is the haplotype which is donating the SNP. Each haplotype is derived from a specific ancestry, and this model can support any number of ancestries.
 
 ### Transitions
-There are two "types" of transitions in the FLARE model.
-1. Transitioning from $h$ to $h'$, where $i$ remains the same.
-2. Transitioning from $i$ to $i'$, where $h$ is guaranteed to change regardless.
-
-To account for this, an ancestry specific switch rate $\rho_i$ is learned.
-
-The overall probability of transitioning from state $(i, h)$ to $(i', h')$ is given by $P(S_m=(i',h')\mid S_{m-1} = (i,h))$. It's derivation is also provided within the Supplementary Methods section of the original paper.
-
-### Initials
-With an $A$ length vector $\mu$, the initial probability $\pi (i, h)$ is given by $\mu_i q_{ih}$ where $q_{ih} = p_{ij} / n_j$
+We assume two scalar transition probabilities, $r$ and $t$. $r$ represents the recombination probability - the probability of transitioning from one haplotype donor to another, within the same ancestry. $t$ represents the admixture probability, where instead we transition to a haplotype donor in a different ancestry. The values can be the same, though in our model's defaults we assume $t$ to be an order of magnitude lower than $r$.
 
 ## Citations
 1. Browning SR, Waples RK, Browning BL. Fast, accurate local ancestry inference with FLARE. Am J Hum Genet. 2023 Feb 2;110(2):326-335. doi: [10.1016/j.ajhg.2022.12.010](https://doi.org/10.1016/j.ajhg.2022.12.010). Epub 2023 Jan 6. PMID: 36610402; PMCID: PMC9943733.
