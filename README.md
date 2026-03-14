@@ -21,7 +21,7 @@ pip install -r requirements.txt
 ```
 Our model can be imported from `model.py`
 ``` python
-from model import Laihmm
+from model import BetterStatesLaihmm, Laihmm
 ```
 We've included a test script (feel free to modify) called `test_unified.py`. It
 1. Loads data from the data folder
