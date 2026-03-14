@@ -75,12 +75,5 @@ The overall probability of transitioning from state $(i, h)$ to $(i', h')$ is gi
 ### Initials
 With an $A$ length vector $\mu$, the initial probability $\pi (i, h)$ is given by $\mu_i q_{ih}$ where $q_{ih} = p_{ij} / n_j$
 
-## Future To-do's, Anticipated Challenges, and Desired Points of Feedback
-- For full list of specific to-do items, see `TODO.md`
-- What metric for measuring accuracy of the outcome is best? Most intuitive?
-- Which FLARE optimizations should be prioritized or de-emphasized given time constraints?
-- What sort of data input would you, dear reader, most want a tool to take when doing LAI?
-  - Especially for someone who is less familiar with LAI, what data source/input type would you think is best?
-
 ## Citations
 1. Browning SR, Waples RK, Browning BL. Fast, accurate local ancestry inference with FLARE. Am J Hum Genet. 2023 Feb 2;110(2):326-335. doi: [10.1016/j.ajhg.2022.12.010](https://doi.org/10.1016/j.ajhg.2022.12.010). Epub 2023 Jan 6. PMID: 36610402; PMCID: PMC9943733.
