@@ -62,5 +62,8 @@ The unobserved state at each SNP is the haplotype which is donating the SNP. Eac
 ### Transitions
 We assume two scalar transition probabilities, $r$ and $t$. $r$ represents the recombination probability - the probability of transitioning from one haplotype donor to another, within the same ancestry. $t$ represents the admixture probability, where instead we transition to a haplotype donor in a different ancestry. The values can be the same, though in our model's defaults we assume $t$ to be an order of magnitude lower than $r$.
 
+### Emissions
+The emission probability at any given SNP is defined by a scalar error rate $\epsilon$. If the SNP in the target haplotype matches the SNP in the donor haplotype, the emission probability is $1 - \epsilon$. Otherwise, the emission probability is $\epsilon$. This is to account for potential errors in sequencing, either in the target or an individual in the reference panel.
+
 ## Citations
 1. Browning SR, Waples RK, Browning BL. Fast, accurate local ancestry inference with FLARE. Am J Hum Genet. 2023 Feb 2;110(2):326-335. doi: [10.1016/j.ajhg.2022.12.010](https://doi.org/10.1016/j.ajhg.2022.12.010). Epub 2023 Jan 6. PMID: 36610402; PMCID: PMC9943733.
