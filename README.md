@@ -7,6 +7,10 @@ To install this tool, start by cloning the repository:
 ``` bash
 git clone https://github.com/jazi2018/CSE284-Final-Project.git
 ```
+From here, the process diverges depending on whether the project was cloned locally or within a Datahub instance.
+### Datahub installation
+All installation requirements should be satisfied provided the Datahub instance is running on the CSE284 docker image. Otherwise, the local installation steps below should be followed.
+### Local installation
 Navigate to the repository directory and (optional but recommended) create a virtual environment
 ``` bash
 python -m venv env
@@ -19,14 +23,17 @@ Our model can be imported from `model.py`
 ``` python
 from model import Laihmm
 ```
-We've included a test script (feel free to modify) called `test.py`. It
+We've included a test script (feel free to modify) called `test_unified.py`. It
 1. Loads data from the data folder
-2. Isolates two samples from different populations. One from CEU, one from YRI.
-3. Generates an emission matrix for the CEU sample and runs the model on it. When calculating accuracy, we make the assumption that the CEU sample has undergone no admixture, and thus their entire genome is attributed to the CEU population.
-4. Performs random admixture on the CEU and YRI population. Our implementation is very inelegant, and we plan on using haptools for future testing.
-5. Generates an emission matrix for the new admixed sample on which the model is run. Accuracy is calculated off the true admixed genotype labels.
+2. Processes data into a useable format for both `Laihmm` and `BetterStatesLaihmm`
+3. Runs some simple tests to verify functionality and compare quality of predictions between the two models
 
-`test.py` is relatively slow to run, primarily limited by the time it takes to read in the data, and the time it takes to run the viterbi algorithm. Regardless, feel free to tinker with various parameters, such as the transition probability in the model or the switch probability in the admixing portion.
+There also exists a notebook version of it (`test_unified.ipynb`), which contains visuals comparing the two models, and discussion of some results.
+
+*Important note*: If you have cloned the repository locally, we have *not* included `ipykernel` or `matplotlib` as requirements in `requirements.txt`. This is intentional, as neither are necessary for the model to run. If you wish to use `test_unified.ipynb`, and didn't clone this repository into an environment which enables the use of python notebooks, these libraries must first be installed.
+```bash
+pip install ipykernel matplotlib
+```
 
 ## Our current model
 Due to the complexity of the FLARE model, we initially implement a simpler model (closer to the model described by Li and Stephens). We intend to implement the FLARE model (described below), but aimed to meet a minimum viable product goal for the peer-review session.
